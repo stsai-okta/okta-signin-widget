@@ -122,7 +122,7 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
 
     function setupAndEnrollOktaPush() {
       return setupOktaPush().then(function (test) {
-        Util.disableEnrollFactorPoll(test.ac);
+        test.originalAjax = Util.stallEnrollFactorPoll(test.ac);
         return enrollFactor(test, resPushEnrollSuccess);
       });
     }
@@ -130,7 +130,7 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
     function enrollOktaPushGoCannotScan() {
       return setupAndEnrollOktaPush().then(function (test) {
         test.scanCodeForm.clickManualSetupLink();
-        return test;
+        return tick(test);
       });
     }
 
@@ -733,7 +733,7 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
         });
         itp('returns to factor list when browser\'s back button is clicked', function () {
           return setupOktaPush({}, true).then(function (test) {
-            Util.disableEnrollFactorPoll(test.ac);
+            test.originalAjax = Util.stallEnrollFactorPoll(test.ac);
             return enrollFactor(test, resPushEnrollSuccess);
           })
           .then(function (test) {
@@ -857,13 +857,13 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
             test.manualSetupForm.submit();
 
             Util.speedUpPolling(test.ac);
-            Util.stallEnrollFactorPoll(test.ac);
+            test.originalAjax = Util.stallEnrollFactorPoll(test.ac, test.originalAjax);
             return tick(test);
           })
           .then(function (test) {
             Expect.isVisible(test.linkSentConfirmation.smsSentMsg());
             expect(test.linkSentConfirmation.getMsgText().indexOf('+14152554668') >= 0).toBe(true);
-            Util.resumeEnrollFactorPoll(test.ac, resAllFactors.response);
+            test.originalAjax = Util.resumeEnrollFactorPoll(test.ac, test.originalAjax, resAllFactors);
             return tick(test);
           })
           .then(function (test) {
@@ -905,8 +905,14 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
             Expect.isVisible(test.passCodeForm.form());
             Expect.isVisible(test.passCodeForm.codeField());
             test.passCodeForm.setCode('1234');
+
+            // Reset the ajaxRequest (changed during push setup)
+            test.ac.options.ajaxRequest = test.originalAjax;
             test.setNextResponse(resSuccess);
             test.passCodeForm.submit();
+            return tick(test);
+          })
+          .then(function (test) {
             expect($.ajax.calls.count()).toBe(1);
             Expect.isJsonPost($.ajax.calls.argsFor(0), {
               url: 'https://foo.com/api/v1/authn/factors/id1234/lifecycle/activate',
@@ -934,7 +940,7 @@ function (_, $, Q, OktaAuth, LoginUtil, StringUtil, Util, DeviceTypeForm, Barcod
           .then(function (test) {
             expect($.ajax.calls.count()).toBe(0);
             Expect.isVisible(test.manualSetupForm.form());
-            Expect.isNotVisible(test.manualSetupForm.countryCodeSelect());
+            expect(test.manualSetupForm.countryCodeSelect().length).toBe(0);
             Expect.isNotVisible(test.manualSetupForm.phoneNumberField());
             Expect.isVisible(test.manualSetupForm.sharedSecretField());
             Expect.isNotVisible(test.manualSetupForm.submitButton());

@@ -21,13 +21,14 @@ define([
   'helpers/xhr/MFA_REQUIRED_duo',
   'helpers/xhr/MFA_REQUIRED_oktaVerify',
   'helpers/xhr/MFA_CHALLENGE_duo',
+  'helpers/xhr/MFA_CHALLENGE_push',
   'helpers/xhr/ERROR_invalid_token',
   'util/Errors',
   'util/BrowserFeatures'
 ],
 function (Okta, Q, Backbone, xdomain, SharedUtil, CryptoUtil, CookieUtil, OktaAuth, Util, Expect, Router,
           $sandbox, PrimaryAuthForm, RecoveryForm, MfaVerifyForm, resSuccess, resRecovery,
-          resMfa, resMfaRequiredDuo, resMfaRequiredOktaVerify, resMfaChallengeDuo,
+          resMfa, resMfaRequiredDuo, resMfaRequiredOktaVerify, resMfaChallengeDuo, resMfaChallengePush,
           errorInvalidToken, Errors, BrowserFeatures) {
 
   var itp = Expect.itp,
@@ -443,13 +444,14 @@ function (Okta, Q, Backbone, xdomain, SharedUtil, CryptoUtil, CookieUtil, OktaAu
       .then(function (test) {
         var form = new PrimaryAuthForm($sandbox);
         expect(form.isPrimaryAuth()).toBe(true);
-        test.setNextResponse(resMfaRequiredOktaVerify);
+        // Respond with MFA_REQUIRED
+        // Verify is immediately called, so respond with MFA_CHALLENGE
+        test.setNextResponse([resMfaRequiredOktaVerify, resMfaChallengePush]);
         form.setUsername('testuser');
         form.setPassword('pass');
         form.submit();
         return tick(test);
-      }).then(function (test) {
-        test.setNextResponse(resSuccess);
+      }).then(function () {
         var form = new MfaVerifyForm($sandbox);
         expect(form.autoPushCheckbox().length).toBe(1);
         expect(form.isAutoPushChecked()).toBe(true);
